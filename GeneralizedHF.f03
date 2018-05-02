@@ -21,6 +21,8 @@ program GeneralizedHF
   call matFile%getMolData(molInfo)
   call overlap%initialize(nBasis*2,nBasis*2,(0.0,0.0))
   nelectrons = wavefunc%nElectrons%ival()
+  nalpha = wavefunc%nAlpha%ival()
+  nbeta = wavefunc%nBeta%ival()
   nbasis = wavefunc%nbasis%ival()
   overlap = wavefunc%overlap_matrix%getBlock('full')
   MOcoeff = wavefunc%mo_coefficients%getBlock('full')
@@ -28,17 +30,15 @@ program GeneralizedHF
   Vnn = mqc_get_nuclear_repulsion(6,molInfo)
   half = 0.5
 
-! determine if even or odd number of electrons
-  if(IAND(NELECTRONS,1) .eq. 0) then
-    nalpha = (nelectrons/2)
-  else
-    nalpha = (nelectrons/2) + 1
-  end if
-  
-  nbeta = nelectrons - nalpha
   call overlap%print(6,'Overlap')
   call MOcoeff%print(6,'MO Coefficients')
-  
+
+!  if(IAND(NELECTRONS,1) .eq. 0) then
+!    nalpha = (nelectrons/2)
+!  else
+!    nalpha = (nelectrons/2) + 1
+!  end if
+!  nbeta = nelectrons - nalpha
 !  initialize occupied MO coefficient matrices (2*nBasis,nAlpha+nBeta)
   
   call core_ham%print(6,'Core Hamiltonian')
@@ -46,8 +46,13 @@ program GeneralizedHF
   call MO_J%initialize(nBasis*2,nElectrons,(0.0,0.0))
 
 !  propogate MO_I matrices for alpha/beta electrons
+  print *, 'alpha : beta: ', nalpha, ' : ', nbeta
   call MO_I%mput(MOcoeff%mat([1,nBasis*2],[1,nalpha]),[1,nBasis*2],[1,nalpha])
-  call MO_I%mput(MOcoeff%mat([1,nBasis*2],[nBasis+1,nBasis+nbeta]),[1,nBasis*2],[nalpha+1,nalpha+nbeta])
+!  call MO_I%mput(MOcoeff%mat([1,nBasis*2],[nBasis+1,nBasis+nbeta]),[1,nBasis*2],[nalpha+1,nalpha+nbeta])
+  if(nbeta.gt.0) then
+    call MO_I%mput(MOcoeff%mat([1,nBasis*2],[nBasis+1,nBasis+nbeta]),&
+      [1,nBasis*2],[nalpha+1,nalpha+nbeta])
+  end if
 
   call MO_I%print(6,'MO_I')
   MO_J = MO_I
@@ -57,10 +62,12 @@ program GeneralizedHF
 
   MIJ = matmul(dagger(MO_I),matmul(overlap,MO_J))
   call MIJ%print(6,'MIJ')
-  MIJ_inv = MIJ%inv()
+  MIJ_inv = MIJ
   rho = matmul(MO_J,matmul(MIJ_inv,dagger(MO_I)))
   call rho%print(6,'rho')
 
+  call Idem%initialize(nBasis*2,nBasis*2,(0.0,0.0))
+  call ps%initialize(nBasis*2,nBasis*2,(0.0,0.0))
   Idem = matmul(matmul(rho,overlap),matmul(rho,overlap)) - matmul(rho,overlap)
   ps = matmul(rho,overlap)
   ps_trace = ps%trace()
