@@ -103,17 +103,25 @@ program NOCI
 !
       call MO_I%mput(mo_list(i)%mat([1,nBasis*2],[1,nAlpha]),[1,nBasis*2],[1,nAlpha])
       call MO_J%mput(mo_list(j)%mat([1,nBasis*2],[1,nAlpha]),[1,nBasis*2],[1,nAlpha])
-
+      
       if(nBeta.gt.0) then
         call MO_I%mput(mo_list(i)%mat([1,nBasis*2],[nBasis+1,nBasis+nBeta]), &
           [1,nBasis*2],[nAlpha+1,nAlpha+nBeta])
         call MO_J%mput(mo_list(j)%mat([1,nBasis*2],[nBasis+1,nBasis+nBeta]), &
           [1,nBasis*2],[nAlpha+1,nAlpha+nBeta])
       end if
+
+      if((i>2).or.(j>2)) then
+        call MO_I%print(6, 'MO_I')
+        call MO_J%print(6, 'MO_J')
+      end if
 !
 !   Build MIJ and check for NIJ threshold
 !
       MIJ = matmul(matmul(dagger(MO_I),overlap),MO_J)
+      if(i.eq.j) then
+        call MIJ%print(6,'MIJ')
+      endif
       NIJ = MIJ%det()
 
       if((NIJ%rval()).gt.NIJ_THRESH) then
