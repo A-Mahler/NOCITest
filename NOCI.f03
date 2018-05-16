@@ -110,21 +110,13 @@ program NOCI
         call MO_J%mput(mo_list(j)%mat([1,nBasis*2],[nBasis+1,nBasis+nBeta]), &
           [1,nBasis*2],[nAlpha+1,nAlpha+nBeta])
       end if
-
-      if((i>2).or.(j>2)) then
-        call MO_I%print(6, 'MO_I')
-        call MO_J%print(6, 'MO_J')
-      end if
 !
 !   Build MIJ and check for NIJ threshold
 !
       MIJ = matmul(matmul(dagger(MO_I),overlap),MO_J)
-      if(i.eq.j) then
-        call MIJ%print(6,'MIJ')
-      endif
       NIJ = MIJ%det()
 
-      if((NIJ%rval()).gt.NIJ_THRESH) then
+      if(abs(NIJ%rval()).gt.NIJ_THRESH) then
         rho = matmul(matmul(MO_J,MIJ%inv()),dagger(MO_I))
 !
 !   Rezero and build G matrix (ERI + Rho contraction)
