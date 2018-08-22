@@ -5,8 +5,8 @@ program StateBreaker
   use iso_fortran_env
 
   implicit none
-  real(kind=real64),parameter::fivedeg = 0.5 * (pi/180)
-  real(kind=real64),parameter::mfivedeg = -0.125 * (pi/180)
+  real(kind=real64),parameter::offset1 = 0.5 * (pi/180)
+  real(kind=real64),parameter::offset2 = 0.5 * (pi/180)
   integer::i,j,k,l,unitno,numFile,io_stat_number,iOut=6
   character(len=80),dimension(2)::fileList
   character(len=:),allocatable::fileName
@@ -71,34 +71,36 @@ program StateBreaker
     call psi(i)%init(4,1)
   end do
 
-  do i = 1, 180
-    theta1 = 0.0 + (i*fivedeg)
-    theta2 = 0.0
-    cos_theta1 = cos(theta1%rval())
-    sin_theta1 = sin(theta1%rval())
-    cos_theta2 = cos(theta2%rval())
-    sin_theta2 = sin(theta2%rval())
+  do i = 1, 90
+    do j = 1, 90
+      theta1 = 0.0 + (i*offset1)
+      theta2 = 0.0 + (i*offset2)
+      cos_theta1 = cos(theta1%rval())
+      sin_theta1 = sin(theta1%rval())
+      cos_theta2 = cos(theta2%rval())
+      sin_theta2 = sin(theta2%rval())
 
 
 ! Rotate ground state orbitals
-    call psi(1)%mput((cos_theta1*mo_list(1)%mat([1,4],[1,1]))+((sin_theta1)*mo_list(1)%mat([1,4],[2,2])),[1,4],[1,1])
-    call psi(2)%mput((cos_theta1*mo_list(1)%mat([1,4],[3,3]))-((sin_theta1)*mo_list(1)%mat([1,4],[4,4])),[1,4],[1,1])
-    call psi(3)%mput((cos_theta2*mo_list(2)%mat([1,4],[1,1]))+((sin_theta2)*mo_list(2)%mat([1,4],[2,2])),[1,4],[1,1])
-    call psi(4)%mput((cos_theta2*mo_list(2)%mat([1,4],[3,3]))-((sin_theta2)*mo_list(2)%mat([1,4],[4,4])),[1,4],[1,1])
+      call psi(1)%mput((cos_theta1*mo_list(1)%mat([1,4],[1,1]))+((sin_theta1)*mo_list(1)%mat([1,4],[2,2])),[1,4],[1,1])
+      call psi(2)%mput((cos_theta1*mo_list(1)%mat([1,4],[3,3]))-((sin_theta1)*mo_list(1)%mat([1,4],[4,4])),[1,4],[1,1])
+      call psi(3)%mput((cos_theta2*mo_list(2)%mat([1,4],[1,1]))+((sin_theta2)*mo_list(2)%mat([1,4],[2,2])),[1,4],[1,1])
+      call psi(4)%mput((cos_theta2*mo_list(2)%mat([1,4],[3,3]))-((sin_theta2)*mo_list(2)%mat([1,4],[4,4])),[1,4],[1,1])
 !
-    call occ_mo(1)%mput(psi(1)%mat([1,4],[1,1]),[1,4],[1,1])
-    call occ_mo(1)%mput(psi(2)%mat([1,4],[1,1]),[1,4],[2,2])
-    call occ_mo(2)%mput(psi(3)%mat([1,4],[1,1]),[1,4],[1,1])
-    call occ_mo(2)%mput(psi(4)%mat([1,4],[1,1]),[1,4],[2,2])
-    E_NOCI = NOCI(occ_mo,2,2,overlap,core_ham,ERI)
+      call occ_mo(1)%mput(psi(1)%mat([1,4],[1,1]),[1,4],[1,1])
+      call occ_mo(1)%mput(psi(2)%mat([1,4],[1,1]),[1,4],[2,2])
+      call occ_mo(2)%mput(psi(3)%mat([1,4],[1,1]),[1,4],[1,1])
+      call occ_mo(2)%mput(psi(4)%mat([1,4],[1,1]),[1,4],[2,2])
+      E_NOCI = NOCI(occ_mo,2,2,overlap,core_ham,ERI)
 
-    e1 = E_NOCI%at(1)
-    e2 = E_NOCI%at(2)
+      e1 = E_NOCI%at(1)
+      e2 = E_NOCI%at(2)
 
-    e1 = e1 + Vnn
-    e2 = e2 + Vnn
+      e1 = e1 + Vnn
+      e2 = e2 + Vnn
 
-    print *, theta1%rval(), e1%rval(), e2%rval()
+      print *, theta1%rval(), theta2%rval(), e1%rval(), e2%rval()
+    end do
   end do
  
 contains
