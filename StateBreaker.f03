@@ -74,7 +74,7 @@ program StateBreaker
   do i = 1, 90
     do j = 1, 90
       theta1 = 0.0 + (i*offset1)
-      theta2 = 0.0 + (i*offset2)
+      theta2 = 0.0 + (j*offset2)
       cos_theta1 = cos(theta1%rval())
       sin_theta1 = sin(theta1%rval())
       cos_theta2 = cos(theta2%rval())
