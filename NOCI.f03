@@ -5,7 +5,7 @@ program NOCI
   use iso_fortran_env
 
   implicit none
-  real(kind=real64),parameter::ZERO_THRESH = 1.0E-5
+  real(kind=real64),parameter::ZERO_THRESH = 1.0E-2
   type(mqc_gaussian_unformatted_matrix_file)::temp_file
   type(mqc_wavefunction)::common_wave
   type(mqc_molecule_data)::common_mol
@@ -20,11 +20,11 @@ program NOCI
   character(len=:),allocatable::fileName
   integer::a,i,j,k,l,m,n,io_stat_number,unitno,numFile = 0,printLevel=3
   type(mqc_matrix),dimension(:),allocatable::mo_list
-  type(mqc_matrix)::S_temp,mij_temp,rho_temp
-  type(mqc_scalar)::temp1,temp2,temp3,temp4
+  type(mqc_matrix)::S_temp,mij_temp,rho_temp,rotate,t1,t2,t3,r_Jmatrix
+  type(mqc_scalar)::temp1,temp2,temp3,temp4,cos_t,sin_t
 !
   call mqc_get_command_argument(1,fileName)
-  
+
   open(newunit=unitno,file=fileName,status='old',iostat=io_stat_number)
   if(io_stat_number/=0) then
     call mqc_error('Error opening file',6)
@@ -104,6 +104,25 @@ program NOCI
   half = 0.5
   zero = 0.0
   one = 1.0
+
+! call t1%identity(4,4)
+! temp1 = cos(pi/8)
+! temp2 = sin(pi/8)
+! temp3 = -1 * sin(pi/8)
+! rotate = temp1 * t1
+! call t2%identity(2,2)
+! call t3%identity(2,2)
+! t2 = temp2 * t2
+! t3 = temp3 * t3
+! call t2%print(6,'t2')
+! call t3%print(6,'t3')
+! call rotate%mput(t2,[3,4],[1,2])
+! call rotate%mput(t3,[1,2],[3,4])
+
+! call rotate%print(6,'rotate')
+
+! mo_list(1) = matmul(rotate,mo_list(1))
+
 !
 !   Begin filling HIJ and NIJ matricies
 !
@@ -134,7 +153,7 @@ program NOCI
       MIJ = matmul(dagger(MO_I),matmul(overlap,MO_J))
       NIJ = MIJ%det()
 
-      if(printLevel.ge.1) then
+      if(printLevel.ge.2) then
         call MO_I%print(6,'MO_I')
         call MO_J%print(6,'MO_J')
         call NIJ%print(6,'NIJ')
@@ -148,51 +167,29 @@ program NOCI
         tmoI = matmul(dagger(Umat),dagger(MO_I))
         tmoJ = matmul(MO_J,dagger(Vmat))
         
-        call Umat%print(6,'Umat')
-        call Vmat%print(6,'Vmat')
-        call S_vec%print(6,'Svec')
+        if(printLevel.ge.3) then
+          call Umat%print(6,'Umat')
+          call Vmat%print(6,'Vmat')
+          call S_vec%print(6,'Svec')
+          call tmoI%print(6,'tmoI')
+          call tmoJ%print(6,'tmoJ')
+        endif
 
-        call S_vec%diag(S_temp)
-        mij_temp = matmul(Umat,matmul(S_temp,Vmat))
-        call mij_temp%print(6,'mij_temp')
-        call tmoI%print(6,'tmoI')
-        call tmoJ%print(6,'tmoJ')
-
+call MO_J%mput(mo_list(j)%mat([1,nBasis*2],[1,nAlpha]),[1,nBasis*2],[1,nAlpha])
+142        call S_vec%diag(S_temp)
         call S_inv%init(nelectrons)
+
         call orth_inv(S_vec,S_inv)
 
         call S_inv%diag(Smat)
-        call Smat%print(6,'Smat')
+        
+        if(printLevel.ge.3) call Smat%print(6,'Smat')
 
         rho = matmul(tmoJ,matmul(Smat,tmoI))
       else
         MIJ_inv = MIJ%inv()
         rho = matmul(MO_J,matmul(MIJ_inv,dagger(MO_I)))
       end if
-
-!     temp1 = -0.164013801498739e-1
-!     temp2 = 0.164013801498739e-1
-!     temp3 = 0.211921854987184e-2
-!     temp4 = -0.130865737592447
-
-!     temp1 = cmplx(0.123655186422883e-1,0.107801986358311e-1)
-!     temp2 = cmplx(-0.763356972506345,-0.665652522436637)
-!     temp3 = cmplx(-0.159772596782495e-2,-0.139284796805242e-2)
-!     temp4 = cmplx(0.986319536451658e-1,0.860051654386188e-1)
-      
-!     call rho_temp%init(4,4,0.0)
-!     call rho_temp%put(temp1,3,1)
-!     call rho_temp%put(temp2,4,1)
-!     call rho_temp%put(temp3,3,2)
-!     call rho_temp%put(temp4,4,2)
-!     if(j.gt.i) then
-!       rho_temp = dagger(rho_temp)
-!     end if
-!     call rho_temp%print(6,'rho_temp')
-
-!     if((i.gt.j).or.(j.gt.i)) then
-!       rho = rho_temp
-!     end if
 
       if(printLevel.ge.2) then
         call MIJ_inv%print(6,'MIJ_inv')
@@ -218,11 +215,11 @@ program NOCI
                 call Gmat%put(Gmat%at(k+nBasis,l+nBasis)-ERI%at(k,n,m,l)*rho%at(m+nBasis,n+nBasis), &
                   k+nBasis,l+nBasis)
                 ! AB Block
-                call Gmat%put(Gmat%at(k+nBasis,l)+ERI%at(k,n,m,l)*rho%at(m+nBasis,n), &
-                  k+nBasis,l)
+                call Gmat%put(Gmat%at(k+nBasis,l)-ERI%at(k,n,m,l) * &
+                  rho%at(m+nBasis,n), k+nBasis,l)
                 ! BA BLock
-                call Gmat%put(Gmat%at(k,l+nBasis)+ERI%at(k,n,m,l)*rho%at(m,n+nBasis), &
-                  k,l+nBasis)
+                call Gmat%put(Gmat%at(k,l+nBasis)-ERI%at(k,n,m,l) * &
+                  rho%at(m,n+nBasis), k,l+nBasis)
               end do
             end do
           end do
@@ -235,6 +232,7 @@ program NOCI
         eri_con = Contraction(rho,Gmat)
 
         if(printLevel.ge.3) then
+          call Gmat%print(6,'Gmat')
           call core_con%print(6,'core contraction')
           call eri_con%print(6,'eri contraction')
         end if
@@ -293,10 +291,12 @@ subroutine orth_inv(Svals,Sinv)
     hold = Svals%at(i)
     temp = hold%rval()
 
-    if(temp.gt.Z_THRESH) then
+    if(temp.le.Z_THRESH) then
+      s_temp = 1.0
+    else if((1-temp).le.Z_THRESH) then
       s_temp = 0.0
     else
-      s_temp = 1.0
+      s_temp = 0.0
     end if
 
     call Sinv%put(s_temp,i)
