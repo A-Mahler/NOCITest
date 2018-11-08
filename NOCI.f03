@@ -175,8 +175,7 @@ program NOCI
           call tmoJ%print(6,'tmoJ')
         endif
 
-call MO_J%mput(mo_list(j)%mat([1,nBasis*2],[1,nAlpha]),[1,nBasis*2],[1,nAlpha])
-142        call S_vec%diag(S_temp)
+        call S_vec%diag(S_temp)
         call S_inv%init(nelectrons)
 
         call orth_inv(S_vec,S_inv)
@@ -215,10 +214,10 @@ call MO_J%mput(mo_list(j)%mat([1,nBasis*2],[1,nAlpha]),[1,nBasis*2],[1,nAlpha])
                 call Gmat%put(Gmat%at(k+nBasis,l+nBasis)-ERI%at(k,n,m,l)*rho%at(m+nBasis,n+nBasis), &
                   k+nBasis,l+nBasis)
                 ! AB Block
-                call Gmat%put(Gmat%at(k+nBasis,l)-ERI%at(k,n,m,l) * &
+                if((NIJ%absval()).gt.ZERO_THRESH) call Gmat%put(Gmat%at(k+nBasis,l)-ERI%at(k,n,m,l) * &
                   rho%at(m+nBasis,n), k+nBasis,l)
                 ! BA BLock
-                call Gmat%put(Gmat%at(k,l+nBasis)-ERI%at(k,n,m,l) * &
+                if((NIJ%absval()).gt.ZERO_THRESH) call Gmat%put(Gmat%at(k,l+nBasis)-ERI%at(k,n,m,l) * &
                   rho%at(m,n+nBasis), k,l+nBasis)
               end do
             end do
@@ -228,8 +227,8 @@ call MO_J%mput(mo_list(j)%mat([1,nBasis*2],[1,nAlpha]),[1,nBasis*2],[1,nAlpha])
 !   Perform contractions
 !
 
-        core_con = Contraction(rho,core_ham)
-        eri_con = Contraction(rho,Gmat)
+        core_con = Contraction(dagger(rho),core_ham)
+        eri_con = Contraction(dagger(rho),Gmat)
 
         if(printLevel.ge.3) then
           call Gmat%print(6,'Gmat')
