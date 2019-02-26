@@ -5,8 +5,8 @@ program NOCI
   use iso_fortran_env
 
   implicit none
-  real(kind=real64),parameter::ZERO_THRESH = 1.0E-2
-  type(mqc_gaussian_unformatted_matrix_file)::temp_file
+  real(kind=real64),parameter::ZERO_THRESH = 1.0E-4
+  type(mqc_gaussian_unformatted_matrix_file)::temp_file,new_file
   type(mqc_wavefunction)::common_wave
   type(mqc_molecule_data)::common_mol
   type(mqc_scf_integral),dimension(:),allocatable::int_list
@@ -20,11 +20,16 @@ program NOCI
   integer(kind=real64)::nElectrons,nAlpha,nBeta,nBasis
   character(len=80),dimension(:),allocatable::fileList
   character(len=:),allocatable::fileName
-  integer::a,i,j,k,l,m,n,io_stat_number,unitno,numFile = 0,printLevel=3
+  character(len=80)::newFileName
+  integer::a,i,j,k,l,m,n,io_stat_number,unitno,numMatrix = 0,numFile = 0,printLevel=3
   type(mqc_matrix),dimension(:),allocatable::mo_list
   type(mqc_matrix)::S_temp,mij_temp,rho_temp,rotate,t1,t2,t3,r_Jmatrix
   type(mqc_scalar)::temp1,temp2,temp3,temp4,cos_t,sin_t
+  type(mqc_scf_integral)::natOrbs
+  type(mqc_matrix)::sh2AtMp,shlTyp,nPrmSh,prmExp,conCoef,conCoTwo,shCoor
+  logical::doGMat=.true.,printTime=.false.,debug=.true.
 !
+  if(printTime) call HMS_CURRENT_PRINT('START')
   call mqc_get_command_argument(1,fileName)
 
   open(newunit=unitno,file=fileName,status='old',iostat=io_stat_number)
@@ -71,6 +76,8 @@ program NOCI
       call mo_list(i)%print(6,'MO COEFFICIENTS')
     end if
   end do
+
+  if(printTime) call HMS_CURRENT_PRINT('MO LOADED')
 !
 !   Assign common matrices and scalars:
 !   overlap, core_ham, ERI, Vnn, nelectrons,
@@ -84,6 +91,15 @@ program NOCI
   call temp_file%getESTObj('wavefunction',common_wave)
   call temp_file%getMolData(common_mol)
   call temp_file%get2ERIs('regular',ERI)
+
+  call temp_file%getArray('SHELL TO ATOM MAP',sh2AtMp)
+  call temp_file%getArray('SHELL TYPES',shlTyp)
+  call temp_file%getArray('NUMBER OF PRIMITIVES PER SHELL',nPrmSh)
+  call temp_file%getArray('PRIMITIVE EXPONENTS',prmExp)
+  call temp_file%getArray('CONTRACTION COEFFICIENTS',conCoef)
+  call temp_file%getArray('P(S=P) CONTRACTION COEFFICIENTS',conCoTwo)
+  call temp_file%getArray('COORDINATES OF EACH SHELL',shCoor)
+
   nbasis = common_wave%nbasis%ival()
   nelectrons = common_wave%nelectrons%ival()
   nalpha = common_wave%nalpha%ival()
@@ -130,6 +146,12 @@ program NOCI
 !
   do i = 1, numFile
     do j = 1, numFile
+      if(debug) then
+        print *, '----------------------------------------------'
+        print *, 'I = ', I, ' J = ', J
+        print *, '----------------------------------------------'
+      end if
+      numMatrix = numMatrix + 1
       call MO_I%init(nbasis*2,nelectrons)
       call MO_J%init(nbasis*2,nelectrons)
       call rho%init(nbasis*2,nelectrons)
@@ -147,7 +169,9 @@ program NOCI
       end if
 
       MIJ = matmul(dagger(MO_I),matmul(overlap,MO_J))
+      if(printTime) CALL HMS_CURRENT_PRINT('MIJ BUILT')
       NIJ = MIJ%det()
+      if(printTime) CALL HMS_CURRENT_PRINT('DETERMINANT BUILT')
 
       
       if(printLevel.ge.2) then
@@ -186,7 +210,12 @@ program NOCI
       else
         MIJ_inv = MIJ%inv()
         rho = matmul(MO_J,matmul(MIJ_inv,dagger(MO_I)))
+        if(printLevel.ge.2) then
+          call rho%print(6,'rho matrix')
+        end if
       end if
+
+      if(printTime) CALL HMS_CURRENT_PRINT('RHO BUILT')
 
       if(printLevel.ge.2) then
         call MIJ_inv%print(6,'MIJ_inv')
@@ -194,23 +223,49 @@ program NOCI
         call common_wave%density_matrix%print(6,'rho')
       end if
 
-      call rho%print(6,'rho actual')
+      ! call rho%print(6,'rho actual')
 
       tmat1 = rho%mat([1,nBasis],[1,nBasis])
       tmat2 = rho%mat([nBasis+1,nBasis*2],[nBasis+1,nBasis*2])
       ! SWAPPED
-      tmat3 = dagger(rho%mat([nBasis+1,nBasis*2],[1,nBasis]))
-      tmat4 = dagger(rho%mat([1,nBasis],[nBasis+1,nBasis*2]))
+      tmat3 = rho%mat([nBasis+1,nBasis*2],[1,nBasis])
+      tmat4 = rho%mat([1,nBasis],[nBasis+1,nBasis*2])
 
-      call tmat1%print(6,'tmat1')
+      ! call tmat1%print(6,'tmat1')
 
       call mqc_integral_allocate(rho_int,'','general',tmat1,tmat2,tmat3,tmat4)
       common_wave%density_matrix = rho_int
+!     call rho_int%print(6,'density')
+!     call rho_int%diag(eVecs=natOrbs)
+!     call natOrbs%print(6,'natrual orbitals')
+
+      if(.not.doGmat) then
+        newFileName = 'matrix-'
+        call build_string_add_int(numMatrix,newFileName,20)
+        newFileName = trim(newFileName) // '.mat'
+        print *, newFileName
+
+        call temp_file%create(newFileName)
+        call temp_file%writeArray('SHELL TO ATOM MAP',sh2AtMp)
+        call temp_file%writeArray('SHELL TYPES',shlTyp)
+        call temp_file%writeArray('NUMBER OF PRIMITIVES PER SHELL',nPrmSh)
+        call temp_file%writeArray('PRIMITIVE EXPONENTS',prmExp)
+        call temp_file%writeArray('CONTRACTION COEFFICIENTS',conCoef)
+        call temp_file%writeArray('P(S=P) CONTRACTION COEFFICIENTS',conCoTwo)
+        call temp_file%writeArray('COORDINATES OF EACH SHELL',shCoor)
+
+!        call temp_file%writeESTObj('mo coefficients',est_integral=natOrbs)
+        call temp_file%writeESTObj('mo coefficients',est_integral=rho_int)
+        call Close_MatF(temp_file%UnitNumber)
+
+      endif
 !
 !   Rezero and build G matrix (ERI + Rho contraction)
 !
-      Gmat = contract(ERI,common_wave%density_matrix)
-!       do k = 1, nBasis
+      if(doGmat) then
+      Gmat = contraction(ERI,common_wave%density_matrix)
+      if(printTime) CALL HMS_CURRENT_PRINT('G MATRIX BUILT')
+      !       do k = 1, nBasis
 !         do l = 1, nBasis
 !           do m = 1, nBasis
 !             do n = 1, nBasis
@@ -238,9 +293,13 @@ program NOCI
 !
 !   Perform contractions
 !
+        call mqc_integral_allocate(rho_int,'','general',tmat1,tmat2,tmat4,tmat3)
+        common_wave%density_matrix = rho_int
 
-        core_con = Contract(common_wave%density_matrix,common_wave%core_hamiltonian)
-        eri_con = Contract(common_wave%density_matrix,Gmat)
+        core_con = Contraction(common_wave%density_matrix,common_wave%core_hamiltonian)
+        eri_con = Contraction(common_wave%density_matrix,Gmat)
+
+        if(printTime) CALL HMS_CURRENT_PRINT('CONTRACTIONS COMPLETED')
 
         if(printLevel.ge.3) then
           call Gmat%print(6,'Gmat')
@@ -249,13 +308,14 @@ program NOCI
         end if
 !
 !   Assign HIJ and NIJ 
-!
+  
         if((NIJ%absval()).lt.ZERO_THRESH) then
-          call Hmat%put((core_con + (half*eri_con)),I,J)
+        call Hmat%put((core_con + (half*eri_con)),I,J)
         else
-          call Hmat%put(NIJ*((core_con + (half*eri_con))),I,J)
+        call Hmat%put(NIJ*((core_con + (half*eri_con))),I,J)
         endif
         call Nmat%put(NIJ,I,J)
+      endif
     end do
   end do
 
@@ -313,7 +373,7 @@ subroutine orth_inv(Svals,Sinv)
     call Sinv%put(s_temp,i)
   end do
   
-  call Svals%print(6,'Svals')
-  call Sinv%print(6,'Sinv')
+  !call Svals%print(6,'Svals')
+  !call Sinv%print(6,'Sinv')
 
 end subroutine orth_inv
